@@ -7,7 +7,7 @@ var pedido = new Pedido
     Valor = 350.90m
 };
 
-processador.Processar(pedido);
+bool sucesso = processador.Processar(pedido);
 
 public class Pedido
 {
@@ -42,14 +42,14 @@ public class ProcessadorDePedido
         _notificador = notificador;
     }
 
-    public void Processar(Pedido pedido)
+    public bool Processar(Pedido pedido)
     {
         if(!pedido.EhValido())
         {
-            Console.WriteLine("[Erro] Pedido inválido!");
-            return;
+            return false;
         }
 
         _notificador.EnviarMensagem(pedido.Cliente, "Seu pedido foi processado com sucesso!");
+        return true;
     }
 }
