@@ -1,6 +1,17 @@
-﻿public class Pedido
+﻿var notificador = new NotificadorConsole();
+var processador = new ProcessadorDePedido(notificador);
+
+var pedido = new Pedido
 {
-    public string Cliente {get; set; }
+    Cliente = "Tio Bob",
+    Valor = 350.90m
+};
+
+processador.Processar(pedido);
+
+public class Pedido
+{
+    public required string Cliente {get; set; }
     public decimal Valor { get; set; }
 
     public bool EhValido()
@@ -18,7 +29,7 @@ public class NotificadorConsole : INotificador
 {
     public void EnviarMensagem(string destinatario, string mensagem)
     {
-        Console.WriteLine($"[Notificação] Para {destinatario}: {mensagem}")
+        Console.WriteLine($"[Notificação] Para {destinatario}: {mensagem}");
     }
 }
 
@@ -28,7 +39,17 @@ public class ProcessadorDePedido
 
     public ProcessadorDePedido(INotificador notificador)
     {
-        -notificador = notificador;
+        _notificador = notificador;
+    }
+
+    public void Processar(Pedido pedido)
+    {
+        if(!pedido.EhValido())
+        {
+            Console.WriteLine("[Erro] Pedido inválido!");
+            return;
+        }
+
+        _notificador.EnviarMensagem(pedido.Cliente, "Seu pedido foi processado com sucesso!");
     }
 }
-

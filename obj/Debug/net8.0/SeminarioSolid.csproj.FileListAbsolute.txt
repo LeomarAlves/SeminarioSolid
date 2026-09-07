@@ -12,3 +12,4 @@
 /home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.pdb
 /home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.genruntimeconfig.cache
 /home/leomar/SeminarioSolid/obj/Debug/net8.0/ref/SeminarioSolid.dll
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.sourcelink.json
