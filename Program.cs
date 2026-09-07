@@ -1,4 +1,9 @@
-﻿var notificador = new NotificadorConsole();
+﻿// ============================================================================
+// PRINCÍPIO KISS (Keep It Simple, Stupid)
+// O fluxo principal é direto e sem complexidade desnecessária.
+// Montamos e conectamos os objetos de forma transparente e manual.
+// ============================================================================
+var notificador = new NotificadorConsole();
 var processador = new ProcessadorDePedido(notificador);
 
 var pedido = new Pedido
@@ -7,8 +12,24 @@ var pedido = new Pedido
     Valor = 350.90m
 };
 
+/*var pedido = new Pedido
+{
+    Cliente = "João",
+    Valor = 0
+};*/
+
 bool sucesso = processador.Processar(pedido);
 
+if (!sucesso)
+{
+    Console.WriteLine("[Erro] Pedido inválido!");
+}
+
+// ==============================================================================
+// SRP (Single Responsibility Principle)
+// Responsabilidade única: Representar os dados do pedido e validar suas regras.
+// Ela não se preocupa com gravação em banco, telas ou envio de notificações.
+// ==============================================================================
 public class Pedido
 {
     public required string Cliente {get; set; }
@@ -20,6 +41,11 @@ public class Pedido
     }
 }
 
+// ============================================================================
+// DIP (Dependency Inversion Principle) - A Abstração (Contrato)
+// Módulos de alto nível e de baixo nível dependem desta interface,
+// e não de implementações concretas diretas.
+// ============================================================================
 public interface INotificador
 {
     void EnviarMensagem(string destinatario, string mensagem);
@@ -33,6 +59,12 @@ public class NotificadorConsole : INotificador
     }
 }
 
+// =================================================================================
+//   SRP + DIP: O Serviço de Alto Nível
+// - SRP: Sua única responsabilidade é orquestrar o processamento do pedido.
+// - DIP: Recebe a abstração (INotificador) via construtor (Injeção de Dependência),
+//   ficando totalmente desacoplado de como a notificação é enviada.
+// =================================================================================
 public class ProcessadorDePedido
 {
     private readonly INotificador _notificador;
