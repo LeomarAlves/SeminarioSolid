@@ -1,0 +1,14 @@
+/home/leomar/SeminarioSolid/bin/Debug/net8.0/SeminarioSolid
+/home/leomar/SeminarioSolid/bin/Debug/net8.0/SeminarioSolid.deps.json
+/home/leomar/SeminarioSolid/bin/Debug/net8.0/SeminarioSolid.runtimeconfig.json
+/home/leomar/SeminarioSolid/bin/Debug/net8.0/SeminarioSolid.dll
+/home/leomar/SeminarioSolid/bin/Debug/net8.0/SeminarioSolid.pdb
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.GeneratedMSBuildEditorConfig.editorconfig
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.AssemblyInfoInputs.cache
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.AssemblyInfo.cs
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.csproj.CoreCompileInputs.cache
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.dll
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/refint/SeminarioSolid.dll
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.pdb
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/SeminarioSolid.genruntimeconfig.cache
+/home/leomar/SeminarioSolid/obj/Debug/net8.0/ref/SeminarioSolid.dll
