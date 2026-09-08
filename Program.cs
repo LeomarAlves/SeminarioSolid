@@ -9,7 +9,7 @@ var processador = new ProcessadorDePedido(notificador);
 var pedido = new Pedido
 {
     Cliente = "Tio Bob",
-    Valor = 350.90m
+    Valor = 100.00m
 };
 
 /*var pedido = new Pedido
@@ -38,6 +38,16 @@ public class Pedido
     public bool EhValido()
     {
         return Valor > 0 && !string.IsNullOrWhiteSpace(Cliente);
+    }
+
+    public decimal AplicarTaxaEntrega()
+    {
+        if(Valor <= 199.99m)
+        {
+            Valor += 19.99m;
+        }
+
+        return Valor;
     }
 }
 
@@ -81,7 +91,11 @@ public class ProcessadorDePedido
             return false;
         }
 
-        _notificador.EnviarMensagem(pedido.Cliente, "Seu pedido foi processado com sucesso!");
+        pedido.AplicarTaxaEntrega();
+
+        _notificador.EnviarMensagem(pedido.Cliente, $"Seu pedido foi processado com sucesso! Valor final: R$ {pedido.Valor:F2}");
+
+        
         return true;
     }
 }
