@@ -6,12 +6,16 @@ Projeto demonstrativo desenvolvido para apresentação e estudo de princípios d
 
 ## 🎯 Objetivo do Projeto
 
-O objetivo deste projeto é demonstrar, de forma prática, didática e sem complexidade desnecessária, como estruturar um fluxo de negócio simples (validação, cálculo de taxa de entrega, notificação de pedidos e retorno padronizado de resultados) aplicando princípios fundamentais de arquitetura e design de software:
+O objetivo deste projeto é demonstrar, de forma prática, didática e sem complexidade desnecessária, como estruturar um fluxo de negócio simples (validação de pedido, cálculo de frete/taxa de entrega, formatação de recibo, notificação de pedidos e retorno padronizado de resultados) aplicando princípios fundamentais de arquitetura e design de software:
 
-- **SRP (*Single Responsibility Principle*)**: Cada classe tem um único propósito e uma única razão para mudar.
-- **DIP (*Dependency Inversion Principle*)**: Módulos de alto nível dependem de abstrações (interfaces), promovendo baixo acoplamento e alta testabilidade.
-- **OCP (*Open/Closed Principle*)**: O sistema é aberto para extensão (novos canais de notificação) e fechado para modificação.
-- **KISS (*Keep It Simple, Stupid*)**: O fluxo principal é limpo, direto e sem sobrecarga estrutural desnecessária.
+- **SRP (*Single Responsibility Principle*)**: Cada classe tem um único propósito e uma única razão para mudar:
+  - `Pedido`: dados e validação de regras de domínio/taxa de entrega.
+  - `GeradorDeRecibo`: formatação e emissão de comprovantes textuais.
+  - `ProcessadorDePedido`: orquestração do fluxo de negócio.
+  - `NotificadorConsole` / `NotificadorEmail`: transmissão da mensagem para cada canal.
+- **OCP (*Open/Closed Principle*)**: O sistema é aberto para extensão e fechado para modificação (novos canais de notificação como `NotificadorEmail` são adicionados sem alterar `ProcessadorDePedido`).
+- **DIP (*Dependency Inversion Principle*)**: Módulos de alto nível dependem de abstrações (`INotificador`), promovendo baixo acoplamento e facilitando testes e alternância de implementações.
+- **KISS (*Keep It Simple, Stupid*)**: O fluxo principal é limpo, direto e sem sobrecarga estrutural ou frameworks desnecessários.
 
 ---
 
@@ -23,6 +27,7 @@ O objetivo deste projeto é demonstrar, de forma prática, didática e sem compl
   - *Top-level Statements* (ponto de entrada simplificado)
   - *Required Properties* (`required string Cliente`)
   - *Nullable Reference Types*
+  - Interpolação de strings formatada
 
 ---
 
@@ -46,6 +51,10 @@ classDiagram
         +string Mensagem
     }
 
+    class GeradorDeRecibo {
+        +Gerar(Pedido pedido) string
+    }
+
     class INotificador {
         <<interface>>
         +EnviarMensagem(string destinatario, string mensagem) void
@@ -55,15 +64,23 @@ classDiagram
         +EnviarMensagem(string destinatario, string mensagem) void
     }
 
+    class NotificadorEmail {
+        +EnviarMensagem(string destinatario, string mensagem) void
+    }
+
     class ProcessadorDePedido {
         -INotificador _notificador
+        -GeradorDeRecibo _geradorDeRecibo
         +Processar(Pedido pedido) ResultadoProcessamento
     }
 
     INotificador <|.. NotificadorConsole : Implementa
-    ProcessadorDePedido o--> INotificador : Depende de (Injeção de Dependência)
+    INotificador <|.. NotificadorEmail : Implementa
+    ProcessadorDePedido o--> INotificador : Depende de (DIP)
+    ProcessadorDePedido o--> GeradorDeRecibo : Depende de (SRP)
     ProcessadorDePedido ..> Pedido : Processa
     ProcessadorDePedido ..> ResultadoProcessamento : Retorna
+    GeradorDeRecibo ..> Pedido : Formata
 ```
 
 ### Diagrama de Sequência (Fluxo de Execução)
@@ -74,9 +91,10 @@ sequenceDiagram
     actor Main as Program (Fluxo Principal)
     participant Processador as ProcessadorDePedido
     participant Pedido as Pedido
-    participant Notificador as INotificador (NotificadorConsole)
+    participant Gerador as GeradorDeRecibo
+    participant Notificador as INotificador (NotificadorEmail / Console)
 
-    Main->>Pedido: Instancia dados (Cliente, Valor)
+    Main->>Pedido: Instancia dados (Cliente = "Tio Bob", Valor = 100.00)
     Main->>Processador: Processar(pedido)
     Processador->>Pedido: EhValido()
     alt Pedido Inválido (Valor <= 0 ou Cliente vazio)
@@ -86,10 +104,12 @@ sequenceDiagram
     else Pedido Válido
         Pedido-->>Processador: true
         Processador->>Pedido: AplicarTaxaEntrega()
-        Pedido-->>Processador: Valor com taxa aplicada
-        Processador->>Notificador: EnviarMensagem(Cliente, "Seu pedido foi processado... Valor final: R$ ...")
-        Notificador-->>Main: Imprime mensagem no console
-        Processador-->>Main: ResultadoProcessamento (Sucesso = true, Mensagem = "Pedido processado...")
+        Pedido-->>Processador: Valor atualizado com taxa (R$ 119.99)
+        Processador->>Gerador: Gerar(pedido)
+        Gerador-->>Processador: "RECIBO-TIO BOB-119.99"
+        Processador->>Notificador: EnviarMensagem(Cliente, "Pedido processado com sucesso! Protocolo: ... | Total: ...")
+        Notificador-->>Main: Imprime mensagem no canal configurado (Console / E-mail)
+        Processador-->>Main: ResultadoProcessamento (Sucesso = true, Mensagem = "Pedido processado com êxito.")
     end
 ```
 
@@ -98,16 +118,20 @@ sequenceDiagram
 ## 🧠 Princípios Aplicados no Código
 
 ### 1. Princípio KISS (*Keep It Simple, Stupid*)
-O ponto de entrada em `Program.cs` compõe os componentes e executa a operação diretamente, sem a necessidade de contêineres de injeção de dependência complexos ou frameworks externos desnecessários para o escopo do seminário:
+O ponto de entrada em `Program.cs` compõe os componentes e executa a operação diretamente, sem a necessidade de contêineres IoC pesados ou frameworks externos:
 
 ```csharp
-var notificador = new NotificadorConsole();
-var processador = new ProcessadorDePedido(notificador);
+// Graças ao DIP podemos alternar facilmente entre canais de notificação:
+// INotificador notificador = new NotificadorConsole(); ou INotificador notificador = new NotificadorEmail();
+INotificador notificador = new NotificadorEmail();
+
+var geradorDeRecibo = new GeradorDeRecibo();
+var processador = new ProcessadorDePedido(notificador, geradorDeRecibo);
 
 var pedido = new Pedido
 {
     Cliente = "Tio Bob",
-    Valor = 200.00m
+    Valor = 100.00m
 };
 
 ResultadoProcessamento resultado = processador.Processar(pedido);
@@ -119,10 +143,11 @@ if (!resultado.Sucesso)
 ```
 
 ### 2. SRP (*Single Responsibility Principle* — Responsabilidade Única)
-- **`Pedido`**: Tem a responsabilidade exclusiva de representar o estado de um pedido, verificar a integridade básica dos seus próprios dados através do método `EhValido()` e aplicar regras de frete inerentes ao pedido com `AplicarTaxaEntrega()`. A classe não se preocupa em enviar mensagens, persistir em banco de dados ou formatar telas.
-- **`ResultadoProcessamento`**: Encapsula os dados resultantes da operação (`Sucesso` e `Mensagem`), padronizando o retorno do processamento e desacoplando as mensagens do fluxo de execução.
-- **`ProcessadorDePedido`**: Tem a responsabilidade única de orquestrar a lógica do processamento de um pedido (validar, aplicar taxa de entrega, acionar a notificação e empacotar o retorno).
-- **`NotificadorConsole`**: Tem a responsabilidade única de emitir a notificação no meio de saída correspondente (neste caso, o terminal).
+- **`Pedido`**: Modela o domínio do pedido, valida a consistência de seus atributos (`EhValido()`) e calcula o acréscimo de entrega (`AplicarTaxaEntrega()`). Não cuida de formatação de recibos nem de envio de avisos.
+- **`GeradorDeRecibo`**: Especialista em formatação e geração textual do protocolo/recibo do pedido (`RECIBO-{CLIENTE}-{VALOR}`). Desacopla as regras de formatação textual da lógica de negócio.
+- **`ResultadoProcessamento`**: Encapsula os dados resultantes da operação (`Sucesso` e `Mensagem`), padronizando o retorno.
+- **`ProcessadorDePedido`**: Orquestra o fluxo de processamento delegando cada tarefa para seu respectivo especialista (validação ao `Pedido`, geração ao `GeradorDeRecibo` e comunicação ao `INotificador`).
+- **`NotificadorConsole` / `NotificadorEmail`**: Responsabilidade única de encaminhar a mensagem ao canal de saída adequado.
 
 ```csharp
 public class Pedido
@@ -146,6 +171,14 @@ public class Pedido
     }
 }
 
+public class GeradorDeRecibo
+{
+    public string Gerar(Pedido pedido)
+    {
+        return $"RECIBO-{pedido.Cliente.ToUpper()}-{pedido.Valor:F2}";
+    }
+}
+
 public class ResultadoProcessamento
 {
     public bool Sucesso { get; set; }
@@ -161,20 +194,40 @@ public class ResultadoProcessamento
       void EnviarMensagem(string destinatario, string mensagem);
   }
   ```
-- **Injeção de Dependência via Construtor:** A classe de alto nível `ProcessadorDePedido` não depende diretamente da implementação concreta `NotificadorConsole`, mas sim da interface `INotificador`:
+- **Implementações Concretas:** As classes de envio implementam a mesma abstração, demonstrando a substituição transparente de canais:
+  ```csharp
+  public class NotificadorConsole : INotificador
+  {
+      public void EnviarMensagem(string destinatario, string mensagem)
+      {
+          Console.WriteLine($"[Console] Para {destinatario}: {mensagem}");
+      }
+  }
+
+  public class NotificadorEmail : INotificador
+  {
+      public void EnviarMensagem(string destinatario, string mensagem)
+      {
+          Console.WriteLine($"[E-mail Enviado] Para: {destinatario.ToLower().Replace(" ", ".")}@solid.com | Conteúdo: {mensagem}");
+      }
+  }
+  ```
+- **Injeção de Dependência via Construtor:** A classe `ProcessadorDePedido` depende da interface `INotificador`:
   ```csharp
   public class ProcessadorDePedido
   {
       private readonly INotificador _notificador;
+      private readonly GeradorDeRecibo _geradorDeRecibo;
 
-      public ProcessadorDePedido(INotificador notificador)
+      public ProcessadorDePedido(INotificador notificador, GeradorDeRecibo geradorDeRecibo)
       {
           _notificador = notificador;
+          _geradorDeRecibo = geradorDeRecibo;
       }
       // ...
   }
   ```
-Isso desacopla os componentes e permite alterar o mecanismo de notificação ou criar testes unitários com *mocks/stubs* sem precisar modificar a classe `ProcessadorDePedido`.
+Isso desacopla os componentes e permite alterar o mecanismo de notificação ou criar testes unitários com *mocks/stubs* sem precisar modificar uma única linha de `ProcessadorDePedido`.
 
 ---
 
@@ -182,12 +235,14 @@ Isso desacopla os componentes e permite alterar o mecanismo de notificação ou 
 
 | Componente | Tipo | Responsabilidade |
 | :--- | :--- | :--- |
-| **`Pedido`** | Classe | Modela os dados do pedido (`Cliente`, `Valor`), provê validação (`EhValido()`) e aplica regras de frete (`AplicarTaxaEntrega()`). |
-| **`ResultadoProcessamento`** | Classe | DTO que padroniza o resultado do processamento (`Sucesso` e `Mensagem`), facilitando respostas consistentes e tratamento de erros. |
-| **`INotificador`** | Interface | Define o contrato de comunicação (`EnviarMensagem`), desacoplando o emissor da implementação. |
-| **`NotificadorConsole`** | Classe | Implementação concreta de `INotificador` que escreve as notificações no `Console`. |
-| **`ProcessadorDePedido`** | Classe | Serviço que orquestra a validação, aplicação de taxa e disparo de notificação, retornando um `ResultadoProcessamento`. |
-| **`Program.cs`** | Arquivo principal | Ponto de entrada (*top-level statements*) onde os objetos são instanciados e o fluxo é executado. |
+| **`Pedido`** | Classe | Modela os dados do pedido (`Cliente`, `Valor`), valida integridade (`EhValido()`) e aplica taxas (`AplicarTaxaEntrega()`). |
+| **`GeradorDeRecibo`** | Classe | Serviço especialista em formatar comprovantes/recibos textuais padronizados com base no pedido. |
+| **`ResultadoProcessamento`** | Classe | DTO que padroniza o retorno (`Sucesso` e `Mensagem`), facilitando tratamento de erros e respostas uniformes. |
+| **`INotificador`** | Interface | Define o contrato de envio (`EnviarMensagem`), desacoplando o emissor da implementação de destino. |
+| **`NotificadorConsole`** | Classe | Implementação de `INotificador` que imprime a notificação diretamente no terminal. |
+| **`NotificadorEmail`** | Classe | Implementação de `INotificador` que simula o disparo de notificação por e-mail com endereço formatado. |
+| **`ProcessadorDePedido`** | Classe | Orquestrador de alto nível que valida o pedido, aplica taxa, solicita a emissão do recibo e dispara a notificação via abstração. |
+| **`Program.cs`** | Arquivo principal | Ponto de entrada (*top-level statements*) onde as instâncias são configuradas e o fluxo é executado. |
 
 ---
 
@@ -215,16 +270,16 @@ Isso desacopla os componentes e permite alterar o mecanismo de notificação ou 
    dotnet run
    ```
 
-4. **Saída esperada (Cenário Padrão — Pedido de R$ 200,00 sem taxa adicional):**
+4. **Saída esperada (Cenário Padrão configurado em `Program.cs` — Pedido de R$ 100,00 com taxa de R$ 19,99 e envio por E-mail):**
    ```text
-   [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 200.00
+   [E-mail Enviado] Para: tio.bob@solid.com | Conteúdo: Pedido processado com sucesso! Protocolo: RECIBO-TIO BOB-119.99 | Total: R$ 119.99
    ```
 
 ---
 
 ## 🧪 Testando Cenários
 
-No arquivo `Program.cs`, é possível alternar e testar diferentes cenários modificando os valores de `Pedido`:
+No arquivo `Program.cs`, é possível alternar e testar diferentes configurações modificando os valores de `Pedido` e a implementação de `INotificador`:
 
 ### Cenário 1: Pedido Válido com Frete Grátis (Valor >= R$ 200.00)
 Pedidos com valor a partir de R$ 200,00 não recebem acréscimo de taxa de entrega:
@@ -234,7 +289,8 @@ var pedido = new Pedido
     Cliente = "Tio Bob",
     Valor = 200.00m
 };
-// Saída: [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 200.00
+// Saída com NotificadorEmail:
+// [E-mail Enviado] Para: tio.bob@solid.com | Conteúdo: Pedido processado com sucesso! Protocolo: RECIBO-TIO BOB-200.00 | Total: R$ 200.00
 ```
 
 ### Cenário 2: Pedido Válido com Taxa de Entrega (Valor <= R$ 199.99)
@@ -246,10 +302,27 @@ var pedido = new Pedido
     Valor = 100.00m
 };
 // Valor original: R$ 100.00 -> Valor final com frete: R$ 119.99
-// Saída: [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 119.99
+// Saída com NotificadorEmail:
+// [E-mail Enviado] Para: tio.bob@solid.com | Conteúdo: Pedido processado com sucesso! Protocolo: RECIBO-TIO BOB-119.99 | Total: R$ 119.99
 ```
 
-### Cenário 3: Pedido Inválido
+### Cenário 3: Alternando para Notificação via Console (DIP na Prática)
+Basta alterar a instância injetada para utilizar `NotificadorConsole`:
+```csharp
+INotificador notificador = new NotificadorConsole();
+var geradorDeRecibo = new GeradorDeRecibo();
+var processador = new ProcessadorDePedido(notificador, geradorDeRecibo);
+
+var pedido = new Pedido
+{
+    Cliente = "Tio Bob",
+    Valor = 100.00m
+};
+// Saída:
+// [Console] Para Tio Bob: Pedido processado com sucesso! Protocolo: RECIBO-TIO BOB-119.99 | Total: R$ 119.99
+```
+
+### Cenário 4: Pedido Inválido
 Ao utilizar um valor menor ou igual a zero, ou nome de cliente vazio / em branco:
 ```csharp
 var pedido = new Pedido
@@ -257,30 +330,35 @@ var pedido = new Pedido
     Cliente = "João",
     Valor = 0
 };
-// Saída: [Erro] Falha ao processar: dados do pedido são inválidos.
+// Saída:
+// [Erro] Falha ao processar: dados do pedido são inválidos.
 ```
 
 ---
 
-## 🔌 Exemplo de Extensibilidade (Princípio Aberto/Fechado - OCP)
+## 🔌 Extensibilidade (Princípio Aberto/Fechado - OCP)
 
-Graças ao desacoplamento através de `INotificador`, para adicionar um novo meio de notificação (por exemplo, envio por WhatsApp ou E-mail), **não é necessário modificar a classe `ProcessadorDePedido`**. Basta implementar a interface em uma nova classe:
+O princípio **Open/Closed** afirma que classes devem estar abertas para extensão, mas fechadas para modificação.
+
+Neste projeto, a introdução de `NotificadorEmail` foi feita implementando `INotificador`, sem alterar nenhuma linha de código da classe `ProcessadorDePedido`.
+
+Da mesma forma, se precisarmos adicionar um canal via SMS ou WhatsApp no futuro, basta criar uma nova implementação da interface:
 
 ```csharp
-public class NotificadorEmail : INotificador
+public class NotificadorWhatsApp : INotificador
 {
     public void EnviarMensagem(string destinatario, string mensagem)
     {
-        // Lógica de envio por E-mail (SMTP, SendGrid, etc.)
-        Console.WriteLine($"[E-mail enviado para {destinatario}]: {mensagem}");
+        // Integração com API do WhatsApp (ex: Twilio, Meta Cloud API)
+        Console.WriteLine($"[WhatsApp Enviado] Para {destinatario}: {mensagem}");
     }
 }
 ```
 
-E no fluxo principal, basta injetar a nova implementação:
+E no ponto de entrada:
 ```csharp
-var notificadorEmail = new NotificadorEmail();
-var processador = new ProcessadorDePedido(notificadorEmail);
+INotificador notificador = new NotificadorWhatsApp();
+var processador = new ProcessadorDePedido(notificador, geradorDeRecibo);
 ```
 
 ---
@@ -290,9 +368,9 @@ var processador = new ProcessadorDePedido(notificadorEmail);
 ```text
 SeminarioSolid/
 ├── .gitignore             # Regras de exclusão do Git para projetos .NET
-├── Program.cs             # Código fonte com classes, interfaces e fluxo principal
-├── README.MD              # Documentação detalhada do projeto
-└── SeminarioSolid.csproj  # Arquivo de configuração do projeto .NET 8
+├── Program.cs             # Código-fonte contendo entidades, serviços, interfaces e fluxo principal
+├── README.MD              # Documentação detalhada do projeto e princípios arquiteturais
+└── SeminarioSolid.csproj  # Configuração do projeto .NET 8
 ```
 
 ---
