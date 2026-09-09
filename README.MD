@@ -6,7 +6,7 @@ Projeto demonstrativo desenvolvido para apresentação e estudo de princípios d
 
 ## 🎯 Objetivo do Projeto
 
-O objetivo deste projeto é demonstrar, de forma prática, didática e sem complexidade desnecessária, como estruturar um fluxo de negócio simples (processamento e notificação de pedidos) aplicando princípios fundamentais de arquitetura e design de software:
+O objetivo deste projeto é demonstrar, de forma prática, didática e sem complexidade desnecessária, como estruturar um fluxo de negócio simples (validação, cálculo de taxa de entrega, notificação de pedidos e retorno padronizado de resultados) aplicando princípios fundamentais de arquitetura e design de software:
 
 - **SRP (*Single Responsibility Principle*)**: Cada classe tem um único propósito e uma única razão para mudar.
 - **DIP (*Dependency Inversion Principle*)**: Módulos de alto nível dependem de abstrações (interfaces), promovendo baixo acoplamento e alta testabilidade.
@@ -38,6 +38,12 @@ classDiagram
         +string Cliente
         +decimal Valor
         +EhValido() bool
+        +AplicarTaxaEntrega() decimal
+    }
+
+    class ResultadoProcessamento {
+        +bool Sucesso
+        +string Mensagem
     }
 
     class INotificador {
@@ -51,12 +57,13 @@ classDiagram
 
     class ProcessadorDePedido {
         -INotificador _notificador
-        +Processar(Pedido pedido) bool
+        +Processar(Pedido pedido) ResultadoProcessamento
     }
 
     INotificador <|.. NotificadorConsole : Implementa
     ProcessadorDePedido o--> INotificador : Depende de (Injeção de Dependência)
     ProcessadorDePedido ..> Pedido : Processa
+    ProcessadorDePedido ..> ResultadoProcessamento : Retorna
 ```
 
 ### Diagrama de Sequência (Fluxo de Execução)
@@ -74,13 +81,15 @@ sequenceDiagram
     Processador->>Pedido: EhValido()
     alt Pedido Inválido (Valor <= 0 ou Cliente vazio)
         Pedido-->>Processador: false
-        Processador-->>Main: false
-        Main->>Main: Exibe "[Erro] Pedido inválido!"
+        Processador-->>Main: ResultadoProcessamento (Sucesso = false, Mensagem = "Falha...")
+        Main->>Main: Exibe "[Erro] Falha ao processar: dados do pedido são inválidos."
     else Pedido Válido
         Pedido-->>Processador: true
-        Processador->>Notificador: EnviarMensagem(Cliente, "Seu pedido foi processado com sucesso!")
+        Processador->>Pedido: AplicarTaxaEntrega()
+        Pedido-->>Processador: Valor com taxa aplicada
+        Processador->>Notificador: EnviarMensagem(Cliente, "Seu pedido foi processado... Valor final: R$ ...")
         Notificador-->>Main: Imprime mensagem no console
-        Processador-->>Main: true
+        Processador-->>Main: ResultadoProcessamento (Sucesso = true, Mensagem = "Pedido processado...")
     end
 ```
 
@@ -98,15 +107,21 @@ var processador = new ProcessadorDePedido(notificador);
 var pedido = new Pedido
 {
     Cliente = "Tio Bob",
-    Valor = 350.90m
+    Valor = 200.00m
 };
 
-bool sucesso = processador.Processar(pedido);
+ResultadoProcessamento resultado = processador.Processar(pedido);
+
+if (!resultado.Sucesso)
+{
+    Console.WriteLine($"[Erro] {resultado.Mensagem}");
+}
 ```
 
 ### 2. SRP (*Single Responsibility Principle* — Responsabilidade Única)
-- **`Pedido`**: Tem a responsabilidade exclusiva de representar o estado de um pedido e verificar a integridade básica dos seus próprios dados através do método `EhValido()`. A classe não se preocupa em enviar mensagens, persistir em banco de dados ou formatar telas.
-- **`ProcessadorDePedido`**: Tem a responsabilidade única de orquestrar a lógica do processamento de um pedido (validar e acionar a notificação).
+- **`Pedido`**: Tem a responsabilidade exclusiva de representar o estado de um pedido, verificar a integridade básica dos seus próprios dados através do método `EhValido()` e aplicar regras de frete inerentes ao pedido com `AplicarTaxaEntrega()`. A classe não se preocupa em enviar mensagens, persistir em banco de dados ou formatar telas.
+- **`ResultadoProcessamento`**: Encapsula os dados resultantes da operação (`Sucesso` e `Mensagem`), padronizando o retorno do processamento e desacoplando as mensagens do fluxo de execução.
+- **`ProcessadorDePedido`**: Tem a responsabilidade única de orquestrar a lógica do processamento de um pedido (validar, aplicar taxa de entrega, acionar a notificação e empacotar o retorno).
 - **`NotificadorConsole`**: Tem a responsabilidade única de emitir a notificação no meio de saída correspondente (neste caso, o terminal).
 
 ```csharp
@@ -119,6 +134,22 @@ public class Pedido
     {
         return Valor > 0 && !string.IsNullOrWhiteSpace(Cliente);
     }
+
+    public decimal AplicarTaxaEntrega()
+    {
+        if (Valor <= 199.99m)
+        {
+            Valor += 19.99m;
+        }
+
+        return Valor;
+    }
+}
+
+public class ResultadoProcessamento
+{
+    public bool Sucesso { get; set; }
+    public string Mensagem { get; set; } = string.Empty;
 }
 ```
 
@@ -151,10 +182,11 @@ Isso desacopla os componentes e permite alterar o mecanismo de notificação ou 
 
 | Componente | Tipo | Responsabilidade |
 | :--- | :--- | :--- |
-| **`Pedido`** | Classe | Modela os dados do pedido (`Cliente`, `Valor`) e provê o método de auto-validação `EhValido()`. |
+| **`Pedido`** | Classe | Modela os dados do pedido (`Cliente`, `Valor`), provê validação (`EhValido()`) e aplica regras de frete (`AplicarTaxaEntrega()`). |
+| **`ResultadoProcessamento`** | Classe | DTO que padroniza o resultado do processamento (`Sucesso` e `Mensagem`), facilitando respostas consistentes e tratamento de erros. |
 | **`INotificador`** | Interface | Define o contrato de comunicação (`EnviarMensagem`), desacoplando o emissor da implementação. |
 | **`NotificadorConsole`** | Classe | Implementação concreta de `INotificador` que escreve as notificações no `Console`. |
-| **`ProcessadorDePedido`** | Classe | Serviço que valida o pedido e, caso válido, dispara a notificação via `INotificador`. |
+| **`ProcessadorDePedido`** | Classe | Serviço que orquestra a validação, aplicação de taxa e disparo de notificação, retornando um `ResultadoProcessamento`. |
 | **`Program.cs`** | Arquivo principal | Ponto de entrada (*top-level statements*) onde os objetos são instanciados e o fluxo é executado. |
 
 ---
@@ -183,36 +215,49 @@ Isso desacopla os componentes e permite alterar o mecanismo de notificação ou 
    dotnet run
    ```
 
-4. **Saída esperada (Cenário de Sucesso):**
+4. **Saída esperada (Cenário Padrão — Pedido de R$ 200,00 sem taxa adicional):**
    ```text
-   [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso!
+   [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 200.00
    ```
 
 ---
 
 ## 🧪 Testando Cenários
 
-No arquivo `Program.cs`, é possível alternar entre os cenários comentando/descomentando as instâncias de `Pedido`:
+No arquivo `Program.cs`, é possível alternar e testar diferentes cenários modificando os valores de `Pedido`:
 
-### Cenário 1: Pedido Válido (Padrão)
+### Cenário 1: Pedido Válido com Frete Grátis (Valor >= R$ 200.00)
+Pedidos com valor a partir de R$ 200,00 não recebem acréscimo de taxa de entrega:
 ```csharp
 var pedido = new Pedido
 {
     Cliente = "Tio Bob",
-    Valor = 350.90m
+    Valor = 200.00m
 };
-// Saída: [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso!
+// Saída: [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 200.00
 ```
 
-### Cenário 2: Pedido Inválido
-Ao utilizar um valor menor ou igual a zero, ou nome de cliente em branco:
+### Cenário 2: Pedido Válido com Taxa de Entrega (Valor <= R$ 199.99)
+Para pedidos com valor menor ou igual a R$ 199,99, o método `AplicarTaxaEntrega()` adiciona R$ 19,99 ao total do pedido:
+```csharp
+var pedido = new Pedido
+{
+    Cliente = "Tio Bob",
+    Valor = 100.00m
+};
+// Valor original: R$ 100.00 -> Valor final com frete: R$ 119.99
+// Saída: [Notificação] Para Tio Bob: Seu pedido foi processado com sucesso! Valor final: R$ 119.99
+```
+
+### Cenário 3: Pedido Inválido
+Ao utilizar um valor menor ou igual a zero, ou nome de cliente vazio / em branco:
 ```csharp
 var pedido = new Pedido
 {
     Cliente = "João",
     Valor = 0
 };
-// Saída: [Erro] Pedido inválido!
+// Saída: [Erro] Falha ao processar: dados do pedido são inválidos.
 ```
 
 ---
