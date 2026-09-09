@@ -9,20 +9,20 @@ var processador = new ProcessadorDePedido(notificador);
 var pedido = new Pedido
 {
     Cliente = "Tio Bob",
-    Valor = 100.00m
+    Valor = 200.00m
 };
 
-/*var pedido = new Pedido
-{
-    Cliente = "João",
-    Valor = 0
-};*/
+ResultadoProcessamento resultado = processador.Processar(pedido);
 
-bool sucesso = processador.Processar(pedido);
-
-if (!sucesso)
+if (!resultado.Sucesso)
 {
-    Console.WriteLine("[Erro] Pedido inválido!");
+    Console.WriteLine($"[Erro] {resultado.Mensagem}");
+}
+
+public class ResultadoProcessamento
+{
+    public bool Sucesso { get; set; }
+    public string Mensagem { get; set; } = string.Empty;
 }
 
 // ==============================================================================
@@ -84,11 +84,15 @@ public class ProcessadorDePedido
         _notificador = notificador;
     }
 
-    public bool Processar(Pedido pedido)
+   public ResultadoProcessamento Processar(Pedido pedido)
     {
-        if(!pedido.EhValido())
+        if (!pedido.EhValido())
         {
-            return false;
+            return new ResultadoProcessamento
+            {
+                Sucesso = false,
+                Mensagem = "Falha ao processar: dados do pedido são inválidos."
+            };
         }
 
         pedido.AplicarTaxaEntrega();
@@ -96,6 +100,10 @@ public class ProcessadorDePedido
         _notificador.EnviarMensagem(pedido.Cliente, $"Seu pedido foi processado com sucesso! Valor final: R$ {pedido.Valor:F2}");
 
         
-        return true;
+        return new ResultadoProcessamento
+        {
+            Sucesso = true,
+            Mensagem = "Pedido processado e taxa calculada com êxito."
+        };
     }
 }
